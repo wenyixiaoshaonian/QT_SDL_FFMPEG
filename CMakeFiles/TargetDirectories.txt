@@ -1,0 +1,4 @@
+/home/caoboxi/data/QT/proc/demo_1/CMakeFiles/rebuild_cache.dir
+/home/caoboxi/data/QT/proc/demo_1/CMakeFiles/demo_1.dir
+/home/caoboxi/data/QT/proc/demo_1/CMakeFiles/edit_cache.dir
+/home/caoboxi/data/QT/proc/demo_1/CMakeFiles/demo_1_autogen.dir

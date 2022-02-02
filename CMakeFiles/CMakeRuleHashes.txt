@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+65c8217220e581d13133cea2a54ff389 CMakeFiles/demo_1_autogen
+cb1168d2c6b65bf325c62b56b2eea0e4 demo_1_zh_CN.ts
