@@ -2,7 +2,6 @@
 #include "./ui_mainwindow.h"
 
 #define SFM_REFRESH_EVENT  (SDL_USEREVENT + 1)
-
 using std::cout;
 using std::endl;
 int video_count = 0;
@@ -418,7 +417,7 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
 
     SDL_memset(stream, 0, len);
 
-    while (len > 0 && !tmp_serial->thread_pause) {
+    while (len > 0 && !tmp_serial->thread_pause && !tmp_serial->quit) {
         //判断本次解码的数据是否全部播放完，全部播放完后解码下一个pkt
         if (tmp_serial->audio_buf_index >= tmp_serial->audio_buf_size) {
             // 音频解码
@@ -553,7 +552,7 @@ Uint32 sdl_refresh_timer_cb(Uint32 interval, void *opaque) {
             SDL_PushEvent(&event);
         }
     }
-    tmp_serial->quit=0;
+ //   tmp_serial->quit=0;
 
     return 0;
 }
@@ -750,17 +749,6 @@ void MainWindow::recv_event()
                         if(!thread_pause)
                             schedule_refresh(1);    //由暂停开始播放 再次发送一个刷新视频帧的事件
                     }
-                    if(event.key.keysym.sym==SDLK_TAB) {
-                        cout << "SDLK_TAB\n";
-                        thread_pause=!thread_pause;
-                        if(!thread_pause)
-                            schedule_refresh(1);    //由暂停开始播放 再次发送一个刷新视频帧的事件
-                    }
-                    if(event.key.keysym.sym==SDLK_ESCAPE) {
-                        cout << "SDLK_ESCAPE\n";
-                        cout << "SDL_QUIT\n";
-                        quit = true;
-                    }
                     break;
 
                 default:
@@ -770,15 +758,8 @@ void MainWindow::recv_event()
         }
         avformat_close_input(&ifmt_ctx);
         cout << "show screen" << endl;
-//        SDL_DestroyWindow(win);
-//        win = NULL;
- //       delete frame;
- //       frame = new QFrame(this);
-//        frame->setObjectName("myframe");
-//        frame->resize(1920,1080);
- //       frame->setStyleSheet("QFrame#myframe{border-image:url(/home/caoboxi/data/QT/proc/demo_1/right.jpg)}" );
-        resize(1280, 720);  //设置大小
-        show();     //播放完后重新显示主界面
+        update();
+        CentralWidget->update();
 }
 int MainWindow::get_format_from_sample_fmt(const char **fmt,
                                       enum AVSampleFormat sample_fmt)
@@ -825,8 +806,11 @@ void MainWindow::rsetText(QListWidgetItem *item)
     if(!strcmp(temp,"文件路径/URL")) {
         if(filename2[0] == '\0')
             print->setText("please input right filename/URL");
-        else
-            print->setText(filename2);
+        else {
+            sprintf(des,"file name : %s\n",filename2);
+            print->setText(des);
+//            print->setText(filename2);
+        }
     }
     else if(!strcmp(temp,"视频格式")) {
         if(infile == NULL)
@@ -867,8 +851,8 @@ int MainWindow::initWindow()
     lab = new QLabel("hello world",this);
 
     lab->setStyleSheet("QLabel{font:30px;color:black;background-color:rgb(ff,ff,ff);}");//设置文本框的外观，包括字体的大小和颜色、按钮的背景色
-    lab->setAlignment(Qt::AlignCenter);//设置文本框内容居中显示
-    lab->setGeometry(100,100,300,50);
+//    lab->setAlignment(Qt::AlignCenter);//设置文本框内容居中显示
+    lab->setGeometry(100,100,150,50);
     lab->setText("<a href=\"https://github.com/\">播放器");
     lab->setToolTip("点击超链接显示URL"); //设置信息提示，当用户的鼠标放在QLabel 文本框上时会自动跳出文字
     lab->setToolTipDuration(1000);//设置提示信息出现的时间，单位是毫秒。
@@ -877,40 +861,34 @@ int MainWindow::initWindow()
 
      //按键设置
      But = new QPushButton("确定",this);
-     But->setGeometry(150,300,50,25);
+     But->setGeometry(50,300,50,25);
      But->setStyleSheet("QPushButton{font:20px;}");
      But->setFont(QFont("宋体", 8));
     //信号与槽，实现当用户点击按钮时，widget 窗口关闭
     connect(But,SIGNAL(clicked()),this,SLOT(on_pushButton_clicked()));
 
      But_quit = new QPushButton("退出",this);
-     But_quit->setGeometry(250,300,50,25);
+     But_quit->setGeometry(150,300,50,25);
      But_quit->setStyleSheet("QPushButton{font:20px;}");
      But_quit->setFont(QFont("宋体", 8));
      connect(But_quit,&QPushButton::clicked,this,&MainWindow::close);
 
-     startBut = new QPushButton("开始播放",this);
-     startBut->setGeometry(150,500,200,50);
-     startBut->setStyleSheet("QPushButton{font:20px;}");
-     startBut->setFont(QFont("宋体", 8));
-     connect(startBut,&QPushButton::clicked,this,&MainWindow::on_PlayButton_clicked);
-
      InputBut = new QPushButton("读入文件信息",this);
-     InputBut->setGeometry(150,430,200,50);
+     InputBut->setGeometry(50,350,200,50);
      InputBut->setStyleSheet("QPushButton{font:20px;}");
      InputBut->setFont(QFont("宋体", 8));
      connect(InputBut,&QPushButton::clicked,this,&MainWindow::on_InputButton_clicked);
 
     //输入文本
     lineEdit = new QLineEdit(this);
-    lineEdit->move(150,200);
+    lineEdit->move(50,200);
     lineEdit->resize(200,30);
     lineEdit->setPlaceholderText("请输入文件路径及名称...");
     lineEdit->setClearButtonEnabled(true);   //让输入框显示“一键清除”按钮
     connect(lineEdit,&QLineEdit::returnPressed,this,&MainWindow::on_pushButton_clicked);
 
     lineEdit_pass = new QLineEdit(this);
-    lineEdit_pass->move(150,250);
+    lineEdit_pass->move(50,250);
     lineEdit_pass->resize(200,30);
     lineEdit_pass->setPlaceholderText("请输入URL地址");
     lineEdit_pass->setClearButtonEnabled(true);   //让输入框显示“一键清除”按钮
@@ -935,8 +913,8 @@ int MainWindow::initWindow()
 
     //设置列表窗口
     listQwin = new QListWidget(this);
-    listQwin->resize(300,100);
-    listQwin->move(100,600);
+    listQwin->resize(200,100);
+    listQwin->move(50,500);
     listQwin->setFont(QFont("宋体",14));
     listQwin->addItem("文件路径/URL");
     listQwin->addItem("视频格式");
@@ -944,33 +922,44 @@ int MainWindow::initWindow()
     //列表的显示窗口
     print = new QLabel(this);
     print->setText("选中内容");
-    print->resize(1000,100);
-    print->move(500,600);
+    print->resize(350,100);
+    print->move(50,620);
+    print->setWordWrap(true);
 //    print->setAlignment(Qt::AlignCenter);
-    print->setStyleSheet("QLabel{font:25px;color:white}");//设置文本框的外观，包括字体的大小和颜色、按钮的背景色
+    print->setStyleSheet("QLabel{font:20px;color:white}");//设置文本框的外观，包括字体的大小和颜色、按钮的背景色
     connect(listQwin,&QListWidget::itemClicked,this,&MainWindow::rsetText);
-
-
-    //窗口分割
-    splitterMain=new QSplitter(Qt::Horizontal,0);                   //Horizontal:水平的
-    textleft=new QTextEdit(QObject::tr("Left Widget"),splitterMain);
-    textleft->setAlignment(Qt::AlignCenter);
 
     //第二个图层
     CentralWidget = new QWidget(this);
-    CentralWidget->move(460,20);      //设置位置
-    CentralWidget->resize(800, 600);  //设置大小
+    CentralWidget->move(310,0);      //设置位置
+    CentralWidget->resize(990, 600);  //设置大小
 //    CentralWidget->move(QPoint(500,0));
     CentralWidget->raise();
     CentralWidget->setWindowTitle("canvastest");
     //添加背景
     frame_2 = new QFrame(CentralWidget);
     frame_2->setObjectName("myframe_2");
-    frame_2->resize(800,600);
+    frame_2->resize(990,600);
     frame_2->setStyleSheet("QFrame#myframe_2{border-image:url(/home/caoboxi/data/QT/proc/demo_1/up.jpg)}" );
     CentralWidget->show();
 
- //   setCentralWidget(CentralWidget);
+    startBut = new QPushButton("开始播放",this);
+    startBut->setGeometry(450,630,150,50);
+    startBut->setStyleSheet("QPushButton{font:20px;}");
+    startBut->setFont(QFont("宋体", 8));
+    connect(startBut,&QPushButton::clicked,this,&MainWindow::on_PlayButton_clicked);
+    //暂停/播放、退出播放按钮
+    SuspendBut = new QPushButton("暂停/播放",this);
+    SuspendBut->setGeometry(700,630,150,50);
+    SuspendBut->setStyleSheet("QPushButton{font:20px;}");
+    SuspendBut->setFont(QFont("宋体", 8));
+    connect(SuspendBut,&QPushButton::clicked,this,&MainWindow::on_SpsStartButton_clicked);
+
+    QuitBut = new QPushButton("quit",this);
+    QuitBut->setGeometry(950,630,150,50);
+    QuitBut->setStyleSheet("QPushButton{font:20px;}");
+    QuitBut->setFont(QFont("宋体", 8));
+    connect(QuitBut,&QPushButton::clicked,this,&MainWindow::on_QuitButton_clicked);
 
     return 0;
 }
@@ -982,7 +971,18 @@ MainWindow::~MainWindow()
     delete [] urladr;
     delete [] filename2;
 }
-
+void MainWindow::on_SpsStartButton_clicked()
+{
+    cout << "SDLK_SPACE\n";
+    thread_pause=!thread_pause;
+    if(!thread_pause)
+        schedule_refresh(1);    //由暂停开始播放 再次发送一个刷新视频帧的事件
+}
+void MainWindow::on_QuitButton_clicked()
+{
+    cout << "plauer quit..." << endl;
+    quit = true;
+}
 //获取数据
 void MainWindow::on_pushButton_clicked()
 {

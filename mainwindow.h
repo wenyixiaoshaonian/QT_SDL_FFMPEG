@@ -137,6 +137,8 @@ private slots:
     void on_MessButton_clicked();
     void on_PlayButton_clicked();
     void on_InputButton_clicked();
+    void on_SpsStartButton_clicked();
+    void on_QuitButton_clicked();
 private:
     Ui::MainWindow *ui;
     QLabel *lab;        //文本框
@@ -156,10 +158,11 @@ private:
     QPushButton *startBut;
     QListWidget *listQwin;
     QLabel *print;
-
     QWidget *CentralWidget;
-    QStackedLayout *stackedLayout;
-
+    QPushButton *SuspendBut;
+    QPushButton *QuitBut;
+    QPushButton *DouspedBut;
+    QPushButton *HalfspedBut;
     //窗口分割
     QSplitter *splitterMain;
     QTextEdit *textleft;
