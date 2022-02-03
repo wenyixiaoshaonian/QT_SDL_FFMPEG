@@ -7,6 +7,13 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QDir>
+#include <QLabel>
+#include <QListWidgetItem>
+#include <QStackedLayout>
+#include <QHBoxLayout>
+#include <QSplitter>
+#include <QTextEdit>
+#include <QTextCodec>
 
 #include <iostream>
 #include "SDL2/SDL.h"
@@ -87,10 +94,10 @@ public:
 
     int initWindow();
     //ffmpeg
-    int open_input_file(const char *filename);
+    int open_input_file(char *filename);
     int open_codec_context(enum AVMediaType type);
     int alloc_image();
-
+    int get_format_from_sample_fmt(const char **fmt,enum AVSampleFormat sample_fmt);
     //队列相关
     void packet_queue_init(PacketQueue *q);
     int packet_queue_put(PacketQueue *q, AVPacket *pkt);
@@ -117,7 +124,7 @@ public:
     void video_display();
 
     void creat_demux_thread();
-
+    void rsetText(QListWidgetItem *item);
 
     //相关回调
     friend void *cbx_parse_thread(void *arg);
@@ -125,11 +132,11 @@ public:
     friend void *cbx_player_media(void *arg);
     friend Uint32 sdl_refresh_timer_cb(Uint32 interval, void *opaque);
     friend void video_refresh_timer(void *userdata);
-
 private slots:
     void on_pushButton_clicked();
     void on_MessButton_clicked();
     void on_PlayButton_clicked();
+    void on_InputButton_clicked();
 private:
     Ui::MainWindow *ui;
     QLabel *lab;        //文本框
@@ -144,8 +151,21 @@ private:
     QMessageBox *MyBox;
     QPushButton* agreeBut;
     QPushButton* disagreeBut;
-    QFrame *frame;
+    QFrame *frame,*frame_2;
+    QPushButton *InputBut;
     QPushButton *startBut;
+    QListWidget *listQwin;
+    QLabel *print;
+
+    QWidget *CentralWidget;
+    QStackedLayout *stackedLayout;
+
+    //窗口分割
+    QSplitter *splitterMain;
+    QTextEdit *textleft;
+    QSplitter *splitterRight;
+    QTextEdit *textUp;
+    QTextEdit *textBottom;
     //SDL
     SDL_Window *win;
     SDL_Renderer *ren;
@@ -154,12 +174,14 @@ private:
     bool quit;                          //SDL事件退出标志
     int thread_pause;
     int finish_flag;                    //结束标志
+    SDL_Surface *sdlSurface;
+    QHBoxLayout *layout;
     //视频信息
     int width, height;                  //video的分辨率
     enum AVPixelFormat pix_fmt;         //raw数据格式(YUV、RGB等)
 
     AVFormatContext *ifmt_ctx;          //媒体文件的抽象
-    const char *infile;                 //输入媒体文件的路径
+    char *infile;                 //输入媒体文件的路径
     AVCodecContext *pCodecCtx;          //解码上下文缓冲区
 
     //音频相关

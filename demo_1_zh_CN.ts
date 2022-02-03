@@ -16,4 +16,12 @@
         <translation type="unfinished"></translation>
     </message>
 </context>
+<context>
+    <name>QObject</name>
+    <message>
+        <location filename="mainwindow.cpp" line="956"/>
+        <source>Left Widget</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
 </TS>

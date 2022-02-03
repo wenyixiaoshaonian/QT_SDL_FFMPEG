@@ -13,6 +13,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
 //    ui->setupUi(this);
     //编解码
+    infile = NULL;
     ifmt_ctx = NULL;
     pCodecCtx= NULL;
     pCodecCtx_v= NULL;
@@ -66,12 +67,11 @@ void MainWindow::packet_queue_init(PacketQueue *q) {
     q->cond = SDL_CreateCond();
 }
 
-int MainWindow::open_input_file(const char *filename)
+int MainWindow::open_input_file(char *filename)
 {
     int ret = 0;
-
+    infile = NULL;
     infile = filename;
-
     avformat_network_init();
     if ((ret = avformat_open_input(&ifmt_ctx, filename, NULL, NULL)) < 0) {
         cout << "Cannot open input file\n";
@@ -580,7 +580,7 @@ int MainWindow::init_sdl()
 //    win = SDL_CreateWindow("Media player",
 //        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 //        width, height, SDL_WINDOW_SHOWN);
-        win = SDL_CreateWindowFrom((void*)winId());
+        win = SDL_CreateWindowFrom((void*)CentralWidget->winId());
         if (win == NULL)
         {
             cout << "SDL_CreateWindow error! error : " << SDL_GetError() << endl;
@@ -590,7 +590,7 @@ int MainWindow::init_sdl()
         //创建渲染器
 
         ren = SDL_CreateRenderer(win, -1,
-            SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+            SDL_RENDERER_ACCELERATED);
         if (ren == NULL)
         {
             cout << "SDL_CreateRenderer error! error : " << SDL_GetError() << endl;
@@ -630,10 +630,14 @@ void MainWindow::video_display() {
 #if 0
         SDL_UpdateTexture(tex, NULL,vp->frame->data[0], vp->frame->linesize[0]);
 #endif
+        sdlSurface = SDL_GetWindowSurface(win);
         rect.x = 0;
         rect.y = 0;
-        rect.w = pCodecCtx_v->width;
-        rect.h = pCodecCtx_v->height;
+//        rect.w = pCodecCtx_v->width;
+//        rect.h = pCodecCtx_v->height;
+
+        rect.w = sdlSurface->w;
+        rect.h = sdlSurface->h;
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, tex, NULL, &rect);
         SDL_RenderPresent(ren);
@@ -746,6 +750,17 @@ void MainWindow::recv_event()
                         if(!thread_pause)
                             schedule_refresh(1);    //由暂停开始播放 再次发送一个刷新视频帧的事件
                     }
+                    if(event.key.keysym.sym==SDLK_TAB) {
+                        cout << "SDLK_TAB\n";
+                        thread_pause=!thread_pause;
+                        if(!thread_pause)
+                            schedule_refresh(1);    //由暂停开始播放 再次发送一个刷新视频帧的事件
+                    }
+                    if(event.key.keysym.sym==SDLK_ESCAPE) {
+                        cout << "SDLK_ESCAPE\n";
+                        cout << "SDL_QUIT\n";
+                        quit = true;
+                    }
                     break;
 
                 default:
@@ -753,20 +768,99 @@ void MainWindow::recv_event()
             }
 
         }
+        avformat_close_input(&ifmt_ctx);
         cout << "show screen" << endl;
+//        SDL_DestroyWindow(win);
+//        win = NULL;
+ //       delete frame;
+ //       frame = new QFrame(this);
+//        frame->setObjectName("myframe");
+//        frame->resize(1920,1080);
+ //       frame->setStyleSheet("QFrame#myframe{border-image:url(/home/caoboxi/data/QT/proc/demo_1/right.jpg)}" );
+        resize(1280, 720);  //设置大小
         show();     //播放完后重新显示主界面
+}
+int MainWindow::get_format_from_sample_fmt(const char **fmt,
+                                      enum AVSampleFormat sample_fmt)
+{
+    int i;
+    struct sample_fmt_entry {
+        enum AVSampleFormat sample_fmt; const char *fmt_be, *fmt_le;
+    } sample_fmt_entries[] = {
+        { AV_SAMPLE_FMT_U8,  "u8",    "u8"    },
+        { AV_SAMPLE_FMT_S16, "s16be", "s16le" },
+        { AV_SAMPLE_FMT_S32, "s32be", "s32le" },
+        { AV_SAMPLE_FMT_FLT, "f32be", "f32le" },
+        { AV_SAMPLE_FMT_DBL, "f64be", "f64le" },
+    };
+    *fmt = NULL;
+
+    for (i = 0; i < FF_ARRAY_ELEMS(sample_fmt_entries); i++) {
+        struct sample_fmt_entry *entry = &sample_fmt_entries[i];
+        if (sample_fmt == entry->sample_fmt) {
+            *fmt = AV_NE(entry->fmt_be, entry->fmt_le);
+            return 0;
+        }
+    }
+
+    fprintf(stderr,
+            "sample format %s is not supported as output format\n",
+            av_get_sample_fmt_name(sample_fmt));
+    return -1;
+}
+void MainWindow::rsetText(QListWidgetItem *item)
+{
+    QString filename_val;
+    QByteArray ba;
+    int i = 0,ret = 0;
+    char *temp;
+    char des[200];
+    const char *fmt;
+    enum AVSampleFormat sfmt;
+    //数据转换
+    filename_val = item->text();
+    ba = filename_val.toLocal8Bit();
+    temp = ba.data();
+    ret = strcmp(temp,"文件路径/URL");
+    if(!strcmp(temp,"文件路径/URL")) {
+        if(filename2[0] == '\0')
+            print->setText("please input right filename/URL");
+        else
+            print->setText(filename2);
+    }
+    else if(!strcmp(temp,"视频格式")) {
+        if(infile == NULL)
+            print->setText("please input right filename/URL");
+        else {
+        sprintf(des,"pix_fmt : %s  width : %d  height : %d \n",av_get_pix_fmt_name(pCodecCtx_v->pix_fmt),width,height);
+        print->setText(des);
+        }
+    }
+    else if(!strcmp(temp,"音频格式")) {
+        if(infile == NULL)
+            print->setText("please input right filename/URL");
+        else {
+        sfmt = pCodecCtx_a->sample_fmt;
+        if (av_sample_fmt_is_planar(sfmt)) {
+            sfmt = av_get_packed_sample_fmt(sfmt);
+        }
+        get_format_from_sample_fmt(&fmt, sfmt);
+        sprintf(des,"fmt : %s  channels : %d  sample_rate : %d \n",fmt,pCodecCtx_a->channels,pCodecCtx_a->sample_rate);
+        print->setText(des);
+        }
+    }
 }
 int MainWindow::initWindow()
 {
 
-    move(500,500);      //设置位置
-    resize(1000, 500);  //设置大小
+    move(300,300);      //设置位置
+    resize(1280, 720);  //设置大小
     setFont(QFont("宋体",16));
 
     //添加背景
     frame = new QFrame(this);
     frame->setObjectName("myframe");
-    frame->resize(1000,500);
+    frame->resize(1280,720);
     frame->setStyleSheet("QFrame#myframe{border-image:url(/home/caoboxi/data/QT/proc/demo_1/right.jpg)}" );
 
     //文本设置
@@ -796,10 +890,16 @@ int MainWindow::initWindow()
      connect(But_quit,&QPushButton::clicked,this,&MainWindow::close);
 
      startBut = new QPushButton("开始播放",this);
-     startBut->setGeometry(750,300,100,50);
+     startBut->setGeometry(150,500,200,50);
      startBut->setStyleSheet("QPushButton{font:20px;}");
      startBut->setFont(QFont("宋体", 8));
      connect(startBut,&QPushButton::clicked,this,&MainWindow::on_PlayButton_clicked);
+
+     InputBut = new QPushButton("读入文件信息",this);
+     InputBut->setGeometry(150,430,200,50);
+     InputBut->setStyleSheet("QPushButton{font:20px;}");
+     InputBut->setFont(QFont("宋体", 8));
+     connect(InputBut,&QPushButton::clicked,this,&MainWindow::on_InputButton_clicked);
 
     //输入文本
     lineEdit = new QLineEdit(this);
@@ -813,6 +913,7 @@ int MainWindow::initWindow()
     lineEdit_pass->move(150,250);
     lineEdit_pass->resize(200,30);
     lineEdit_pass->setPlaceholderText("请输入URL地址");
+    lineEdit_pass->setClearButtonEnabled(true);   //让输入框显示“一键清除”按钮
 //    lineEdit_pass->setEchoMode(QLineEdit::Password);
     //添加回车事件
     connect(lineEdit_pass,&QLineEdit::returnPressed,this,&MainWindow::on_pushButton_clicked);
@@ -832,10 +933,44 @@ int MainWindow::initWindow()
     //添加信号和槽，监听用户点击的按钮，如果用户拒绝，则主窗口随之关闭。
 //    connect(MyBox,&QMessageBox::buttonClicked,this,&MainWindow::on_MessButton_clicked);
 
+    //设置列表窗口
+    listQwin = new QListWidget(this);
+    listQwin->resize(300,100);
+    listQwin->move(100,600);
+    listQwin->setFont(QFont("宋体",14));
+    listQwin->addItem("文件路径/URL");
+    listQwin->addItem("视频格式");
+    listQwin->addItem(new QListWidgetItem("音频格式"));
+    //列表的显示窗口
+    print = new QLabel(this);
+    print->setText("选中内容");
+    print->resize(1000,100);
+    print->move(500,600);
+//    print->setAlignment(Qt::AlignCenter);
+    print->setStyleSheet("QLabel{font:25px;color:white}");//设置文本框的外观，包括字体的大小和颜色、按钮的背景色
+    connect(listQwin,&QListWidget::itemClicked,this,&MainWindow::rsetText);
 
-//    frame->show();
-//    setStyleSheet("QMainWindow {background-image:url(/home/caoboxi/data/QT/proc/demo_1/right.jpg)}" );
 
+    //窗口分割
+    splitterMain=new QSplitter(Qt::Horizontal,0);                   //Horizontal:水平的
+    textleft=new QTextEdit(QObject::tr("Left Widget"),splitterMain);
+    textleft->setAlignment(Qt::AlignCenter);
+
+    //第二个图层
+    CentralWidget = new QWidget(this);
+    CentralWidget->move(460,20);      //设置位置
+    CentralWidget->resize(800, 600);  //设置大小
+//    CentralWidget->move(QPoint(500,0));
+    CentralWidget->raise();
+    CentralWidget->setWindowTitle("canvastest");
+    //添加背景
+    frame_2 = new QFrame(CentralWidget);
+    frame_2->setObjectName("myframe_2");
+    frame_2->resize(800,600);
+    frame_2->setStyleSheet("QFrame#myframe_2{border-image:url(/home/caoboxi/data/QT/proc/demo_1/up.jpg)}" );
+    CentralWidget->show();
+
+ //   setCentralWidget(CentralWidget);
 
     return 0;
 }
@@ -855,6 +990,8 @@ void MainWindow::on_pushButton_clicked()
     int i = 0;
     char *temp;
     cout << "on_pushButton_clicked!" << std::endl;
+        memset(filename2,'\0',50);
+        memset(urladr,'\0',50);
     //数据转换
     filename = lineEdit->text();
     ba = filename.toLatin1();
@@ -879,6 +1016,7 @@ void MainWindow::on_pushButton_clicked()
     cout << "passwd:" << urladr << endl;
 //    MyBox->show();
 
+    lineEdit_pass->clear();
 }
 
 //判断按钮
@@ -889,66 +1027,66 @@ void MainWindow::on_MessButton_clicked()
 }
 
 
-
-
-void *cbx_player_media(void *arg)
+void MainWindow::on_InputButton_clicked()
 {
     int ret;
-    const char *file;
-    MainWindow* tmp_serial=(MainWindow*)arg;
+    char *file;
+
     cout << "prepare to player....." << endl;
-    if(tmp_serial->urladr[0] == '\0' && tmp_serial->filename2[0] == '\0')
+    if(urladr[0] == '\0' && filename2[0] == '\0')
         cout << "please input url or filename!" << endl;
     else {
 
-    if (tmp_serial->urladr[0] != '\0') {
-        cout << "start to url with addr :" << tmp_serial->urladr <<endl;
-        file = tmp_serial->urladr;
+    if (urladr[0] != '\0') {
+        cout << "start to url with addr :" << urladr <<endl;
+        file = urladr;
     }
 
-    if(tmp_serial->filename2[0] != '\0') {
-        cout << "start to filename :" << tmp_serial->filename2 <<endl;
-        file = tmp_serial->filename2;
+    if(filename2[0] != '\0') {
+        cout << "start to filename :" << filename2 <<endl;
+        file = filename2;
     }
 
-        ret = tmp_serial->open_input_file(file);
+        ret = open_input_file(file);
         if(ret) {
             cout << "open_input_file error...\n";
         }
 
-
-        memset(tmp_serial->filename2,'\0',50);
-        memset(tmp_serial->urladr,'\0',50);
-        ret = tmp_serial->open_codec_context(AVMEDIA_TYPE_VIDEO);
+        ret = open_codec_context(AVMEDIA_TYPE_VIDEO);
         if(ret) {
             cout << "open_codec_context AVMEDIA_TYPE_VIDEO error...\n";
         }
 
 
-        ret = tmp_serial->open_codec_context(AVMEDIA_TYPE_AUDIO);
+        ret = open_codec_context(AVMEDIA_TYPE_AUDIO);
         if(ret) {
             cout << "open_codec_context AVMEDIA_TYPE_AUDIO error...\n";
         }
-        tmp_serial->resize(tmp_serial->width, tmp_serial->height);  //设置大小
-        ret = tmp_serial->alloc_image();
+        ret = alloc_image();
         if(ret) {
             cout << "alloc_image error...\n";
         }
+    }
+}
+void *cbx_player_media(void *arg)
+{
+    int ret;
+    MainWindow* tmp_serial=(MainWindow*)arg;
 
 
-        //初始化SDL、定时器 创建复分解线程
-        tmp_serial->init_sdl();
-        if(ret) {
-            cout << "init_sdl error...\n";
-        }
+    if(tmp_serial->infile == NULL)
+        cout << "please input url or filename!" << endl;
+    else {
+    //初始化SDL、定时器 创建复分解线程
+    ret = tmp_serial->init_sdl();
+    if(ret) {
+        cout << "init_sdl error...\n";
+    }
+    //创建复分解线程
+    tmp_serial->creat_demux_thread();
 
-#if 1
-        //创建复分解线程
-        tmp_serial->creat_demux_thread();
-
-        //开始处理事件
-        tmp_serial->recv_event();
-#endif
+    //开始处理事件
+    tmp_serial->recv_event();
     }
 }
 
@@ -960,6 +1098,5 @@ void MainWindow::on_PlayButton_clicked()
 
     //创建复播放线程
     pthread_create(&player_tid, 0, cbx_player_media, this);
- //   player_media();
-    setUpdatesEnabled(false);
+ //   setUpdatesEnabled(false);     //关闭按键效果
 }
